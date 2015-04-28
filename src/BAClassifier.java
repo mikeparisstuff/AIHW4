@@ -16,11 +16,15 @@ public class BAClassifier extends Classifier{
 	// List is empty if the value is numeric, else the list of options
 	HashMap<String, List<String>> valTypes = new HashMap<String, List<String>>();
 	
+	List<String> trainingData = new ArrayList<String>();
+	
 	Matrix attrMat;
 	Matrix outputMat;
 	Matrix thetas;
 	
 	List<String> outputs;
+	List<String> trainingOutputs = new ArrayList<String>();
+	List<String> predictions = new ArrayList<String>();
 
 	public BAClassifier(String namesFilepath) {
 		super(namesFilepath);
@@ -58,7 +62,7 @@ public class BAClassifier extends Classifier{
 		catch (Exception e) {
 			System.err.format("Exception occured trying to read '%s'.", namesFilepath);
 		}
-		System.out.println("Finished Reading File");
+//		System.out.println("Finished Reading File");
 		for (int i = 0; i < valNames.size(); i++) {
 			List<String> vals = valTypes.get(valNames.get(i));
 			System.out.format("Vals for '%s': %s\n", valNames.get(i), vals.toString());
@@ -68,55 +72,78 @@ public class BAClassifier extends Classifier{
 
 	public void train(String trainingDataFilpath) {
 		System.out.println("Training");
+		
 		try {
 			BufferedReader reader = new BufferedReader(new FileReader(trainingDataFilpath));
 			String line;
-			int lineNum = 0;
-			List<Double> allData = new ArrayList<Double>();
-			List<Double> outputData = new ArrayList<Double>();
 			while ((line = reader.readLine()) != null) {
 				// Start building the matrix
-//				double[] row = new double[valNames.size()];
-				List<Double> row = new ArrayList<Double>();
-				row.add(0.5);
-				String[] vals = line.split("\\s+");
-				int i = 0;
-				for (; i < vals.length-1; i++) {
-					// we are looking at this attr
-					String attr = valNames.get(i);
-					List<String> discVals = valTypes.get(attr);
-					if (discVals.size() == 0) {
-						// We are looking at a numeric
-						row.add(((Number)Integer.parseInt(vals[i])).doubleValue());
-					} else {
-						// Find the index of vals[i] in discVals and assign that integer value
-						row.add(((Number)discVals.indexOf(vals[i])).doubleValue());
-					}
-				}
-				allData.addAll(row);
-				// add outputs value
-				outputData.add((double)outputs.indexOf(vals[i]));
-				
-				lineNum++;
+//					double[] row = new double[valNames.size()];
+				trainingData.add("1 " + line);
 			}
-			double[] cleaned = new double[allData.size()];
-			for (int i = 0; i < allData.size(); i++) {
-				cleaned[i] = allData.get(i);
-			}
-			double[] cleanedOut = new double[outputData.size()];
-			for (int i = 0; i < outputData.size(); i++) {
-				cleanedOut[i] = outputData.get(i);
-			}
-			System.out.println("Done");
-			Matrix m = new Matrix(cleaned, lineNum);
-			Matrix outputM = new Matrix(cleanedOut, lineNum);
-			attrMat = m;
-			outputMat = outputM;
-			thetas = calculateTheta();
 		}
 		catch (Exception e) {
 			System.err.format("Exception occured trying to read '%s'.", trainingDataFilpath);
 		}
+		int lineNum = trainingData.size();
+		
+		double[][] allData = new double[lineNum][valNames.size()];
+		double[][] outputData = new double[lineNum][1];
+		
+//		List<Double> allData = new ArrayList<Double>();
+//		List<Double> outputData = new ArrayList<Double>();
+//		while ((line = reader.readLine()) != null) {
+		for (int l = 0; l < lineNum; l++) {
+			
+			// Start building the matrix
+//				double[] row = new double[valNames.size()];
+			
+//			List<Double> row = new ArrayList<Double>();
+
+			String[] vals = trainingData.get(l).split("\\s+");
+			double[] row = new double[vals.length-1];
+			int i = 0;
+			for (; i < vals.length-1; i++) {
+				// we are looking at this attr
+				if ( i == 0) {
+					row[i] = Double.parseDouble(vals[i]);
+					continue;
+				}
+				String attr = valNames.get(i-1);
+				List<String> discVals = valTypes.get(attr);
+				if (discVals.size() == 0) {
+					// We are looking at a numeric
+					row[i] = Double.parseDouble(vals[i]);
+				} else {
+					// Find the index of vals[i] in discVals and assign that integer value
+					row[i] = (double)discVals.indexOf(vals[i]);
+				}
+			}
+			allData[l] = row;
+			// add outputs value
+			double[] v = new double[1];
+			trainingOutputs.add(vals[i]);
+			v[0] = (double)outputs.indexOf(vals[i]);
+			outputData[l] =  v ;
+//			outputData.add((double)outputs.indexOf(vals[i]));
+			
+		}
+//		double[] cleaned = new double[allData.size()];
+//		for (int i = 0; i < allData.size(); i++) {
+//			cleaned[i] = allData.get(i);
+//		}
+//		double[] cleanedOut = new double[outputData.size()];
+//		for (int i = 0; i < outputData.size(); i++) {
+//			cleanedOut[i] = outputData.get(i);
+//		}
+		System.out.println("Done");
+		Matrix m = new Matrix(allData);
+		Matrix outputM = new Matrix(outputData);
+		attrMat = m;
+		outputMat = outputM;
+		thetas = calculateTheta();
+		
+		
 	}
 	//  𝜃 = (𝑋𝑇𝑋)−1 ∗ 𝑋𝑇Y
 	private Matrix calculateTheta() {
@@ -153,12 +180,27 @@ public class BAClassifier extends Classifier{
 				}
 				int ind = (sum >= .5) ? 1 : 0;
 				System.out.format("Prediction: '%s'\n", outputs.get(ind));
+				predictions.add(outputs.get(ind));
 				lineNum++;
 			}
 		}
 		catch (Exception e) {
 			System.err.format("Exception occured trying to read '%s'.", testDataFilepath);
 		}
+		checkPredictions();
+	}
+	
+	private void checkPredictions() {
+		int numCorrect = 0;
+		int numWrong = 0;
+		for (int i = 0; i < predictions.size(); i++) {
+			if(predictions.get(i).equals(trainingOutputs.get(i))) {
+				numCorrect++;
+			} else {
+				numWrong++;
+			}
+		}
+		System.out.format("Num Correct: %d\nNum Wrong: %d", numCorrect, numWrong);
 	}
 	
 }
